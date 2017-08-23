@@ -8,16 +8,85 @@
 
 #import "AppDelegate.h"
 
-@interface AppDelegate ()
+#import <MQTTClient/MQTTClient.h>
+
+@interface AppDelegate ()<MQTTSessionDelegate>
+
+@property (nonatomic,strong) MQTTSession *mySession;
 
 @end
+
+#define MQTT_HOST @"192.168.0.112"
+#define MQTT_PORT 1883
 
 @implementation AppDelegate
 
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     // Override point for customization after application launch.
+    
+    //初始化session
+    self.mySession = [self createMQTTSession];
+    
+    //订阅主题
+    [self subscribeToTopic];
+    
     return YES;
+}
+
+#pragma mark- 初始化一个MQTTSession
+- (MQTTSession *)createMQTTSession
+{
+    MQTTSession *mySession = [[MQTTSession alloc]init];
+    // 给mySession对象设置基本信息
+    mySession.transport = [self createSocketTransport];
+    mySession.delegate = self;
+    //设定超时时长，如果超时则认为是连接失败，如果设为0则是一直连接。
+    [mySession connectAndWaitTimeout:30];
+    
+    return mySession;
+}
+
+#pragma mark- 初始化一个 MQTTCFSocketTransport 对象
+- (MQTTCFSocketTransport *)createSocketTransport
+{
+    MQTTCFSocketTransport *transport = [[MQTTCFSocketTransport alloc]init];
+    //设置MQTT服务器地址
+    transport.host = MQTT_HOST;
+    //设置MQTT端口号
+    transport.port = MQTT_PORT;
+    
+    return transport;
+}
+
+#pragma mark- 订阅主题
+- (void)subscribeToTopic
+{
+    
+    [self.mySession subscribeToTopic:@"example/#" atLevel:2 subscribeHandler:^(NSError *error, NSArray<NSNumber *> *gQoss) {
+        
+        if (error)
+        {
+            NSLog(@"subscribe failed %@",error.localizedDescription);
+        }else
+        {
+            NSLog(@"subscribe success");
+        }
+    }];
+}
+
+#pragma mark- 发布消息
+- (void)publicMessageWithData:(NSData *)sendData onTopic:(NSString *)topic
+{
+    [self.mySession publishAndWaitData:sendData onTopic:topic retain:NO qos:MQTTQosLevelAtLeastOnce];
+}
+
+#pragma mark- MQTTSessionDelegate
+#pragma mark 收到消息回调
+- (void)session:(MQTTSession *)session newMessage:(NSData *)data onTopic:(NSString *)topic
+{
+    //发布消息
+    [self publicMessageWithData:data onTopic:topic];
 }
 
 
